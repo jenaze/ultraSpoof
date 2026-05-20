@@ -1,0 +1,26 @@
+mode: server
+psk: PUT_YOUR_SECURE_PSK_HERE
+log_level: info
+server:
+  listen:
+    tcp: 0.0.0.0:9443
+  fast_recovery: true
+  upstream_socks: 127.0.0.1:10808
+  download:
+    iran_ip: IRAN_SERVER_IP
+    iran_udp_port: 9444
+    spoof_source_ip: 1.1.1.1
+    spoof_udp_source_port: 0
+    interface: ""
+    max_chunk_size: 1400
+
+    encryption: none
+
+    target_read_buffer_bytes: 16777216
+    send_batch_size: 256
+    send_workers: 4
+    skip_udp_checksum: true
+    socket_send_buffer_bytes: 134217728
+    pipeline_slots: 16
+    retransmit_buffer_packets: 262144
+  protocol_version: 1

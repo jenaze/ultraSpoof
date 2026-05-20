@@ -8,6 +8,8 @@ import (
 	"net"
 	"sync/atomic"
 	"syscall"
+
+	"golang.org/x/sys/unix"
 )
 
 // relayUDPSender ارسال UDP دانلود بدون raw socket؛ مقصد همان relay است (کرنل واسط SNAT/DNAT می‌زند).
@@ -25,19 +27,26 @@ func newRelayUDPSender(relay *net.UDPAddr, workers int, sndBuf int, iface string
 	if relay == nil {
 		return nil, fmt.Errorf("relay address is nil")
 	}
-	lc := net.ListenConfig{}
-	if iface != "" {
-		lc.Control = func(network, address string, c syscall.RawConn) error {
+	lc := net.ListenConfig{
+		Control: func(network, address string, c syscall.RawConn) error {
 			var ctrlErr error
 			err := c.Control(func(fd uintptr) {
-				ctrlErr = syscall.SetsockoptString(int(fd), syscall.SOL_SOCKET, syscall.SO_BINDTODEVICE, iface)
+				if iface != "" {
+					ctrlErr = unix.BindToDevice(int(fd), iface)
+				}
+				if sndBuf > 0 {
+					_ = unix.SetsockoptInt(int(fd), unix.SOL_SOCKET, unix.SO_SNDBUF, sndBuf)
+					// دور زدن wmem_max در صورت داشتن CAP_NET_ADMIN
+					_ = unix.SetsockoptInt(int(fd), unix.SOL_SOCKET, unix.SO_SNDBUFFORCE, sndBuf)
+				}
 			})
 			if err != nil {
 				return err
 			}
 			return ctrlErr
-		}
+		},
 	}
+
 	conns := make([]*net.UDPConn, workers)
 	for i := 0; i < workers; i++ {
 		pc, err := lc.ListenPacket(context.Background(), "udp", ":0")
@@ -46,9 +55,6 @@ func newRelayUDPSender(relay *net.UDPAddr, workers int, sndBuf int, iface string
 			return nil, fmt.Errorf("listen udp for relay: %w", err)
 		}
 		uc := pc.(*net.UDPConn)
-		if sndBuf > 0 {
-			_ = uc.SetWriteBuffer(sndBuf)
-		}
 		conns[i] = uc
 	}
 	return &relayUDPSender{conns: conns, relay: relay}, nil

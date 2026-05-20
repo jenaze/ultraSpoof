@@ -1161,3 +1161,18 @@ top -H -p $(pgrep ultraSpoof)                                   بررسی CPU �
 ```
 
 اگر همهٔ مراحل را درست رفته باشید، درخواست `curl` بالا باید IP سرور ترکیه (یا هر IP ای که سایت مقصد می‌بیند) را برگرداند و همه چیز آماده است.
+
+## High Performance Recommendations (Ubuntu amd64)
+
+To get the absolute best performance on Ubuntu amd64 (resolving minor disconnects or micro-lags), ultraSpoof now natively sets `SO_RCVBUFFORCE` and `SO_SNDBUFFORCE` options under the hood. However, for maximum bandwidth and queue throughput, you should consider the following settings:
+
+1. Use the `recommended-server.yaml` and `recommended-client.yaml` configurations.
+2. For the client, we recommend `recv_sockets: 2` (or 4, up to CPU count) to evenly distribute softirq load across cores.
+3. For the server, use `send_workers` equal to half or full your CPU thread count.
+4. Always set `encryption: "none"` if you are running other protocols like Shadowsocks/VMess underneath, to lower CPU usage and increase raw UDP throughput.
+5. Consider adjusting your Kernel's max file descriptors:
+   ```bash
+   sysctl -w fs.file-max=2097152
+   ```
+
+Check `recommended-client.yaml` and `recommended-server.yaml` in this repository for full setup templates.
