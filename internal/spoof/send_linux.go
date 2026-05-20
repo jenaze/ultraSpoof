@@ -9,7 +9,8 @@ import (
 	"net"
 	"sync"
 	"sync/atomic"
-	"syscall"
+
+	"golang.org/x/sys/unix"
 )
 
 // SenderConfig تنظیمات راه‌اندازی Sender. مقادیر صفر/خالی به default های هوشمند برمی‌گردند.
@@ -62,23 +63,25 @@ func NewSenderWithConfig(cfg SenderConfig) (*Sender, error) {
 	shards := make([]*senderShard, 0, cfg.Workers)
 	closeAll := func() {
 		for _, sh := range shards {
-			_ = syscall.Close(sh.fd)
+			_ = unix.Close(sh.fd)
 		}
 	}
 	for i := 0; i < cfg.Workers; i++ {
-		fd, err := syscall.Socket(syscall.AF_INET, syscall.SOCK_RAW, syscall.IPPROTO_RAW)
+		fd, err := unix.Socket(unix.AF_INET, unix.SOCK_RAW, unix.IPPROTO_RAW)
 		if err != nil {
 			closeAll()
 			return nil, fmt.Errorf("raw socket: %w", err)
 		}
 		if cfg.Iface != "" {
-			if err := syscall.SetsockoptString(fd, syscall.SOL_SOCKET, syscall.SO_BINDTODEVICE, cfg.Iface); err != nil {
-				_ = syscall.Close(fd)
+			if err := unix.BindToDevice(fd, cfg.Iface); err != nil {
+				_ = unix.Close(fd)
 				closeAll()
 				return nil, fmt.Errorf("bind to device %s: %w", cfg.Iface, err)
 			}
 		}
-		_ = syscall.SetsockoptInt(fd, syscall.SOL_SOCKET, syscall.SO_SNDBUF, cfg.SocketSendBufferBytes)
+		_ = unix.SetsockoptInt(fd, unix.SOL_SOCKET, unix.SO_SNDBUF, cfg.SocketSendBufferBytes)
+		_ = unix.SetsockoptInt(fd, unix.SOL_SOCKET, unix.SO_SNDBUFFORCE, cfg.SocketSendBufferBytes)
+
 		shards = append(shards, &senderShard{fd: fd})
 	}
 
@@ -99,7 +102,7 @@ func (s *Sender) Close() error {
 	var firstErr error
 	s.closeOnce.Do(func() {
 		for _, sh := range s.shards {
-			if err := syscall.Close(sh.fd); err != nil && firstErr == nil {
+			if err := unix.Close(sh.fd); err != nil && firstErr == nil {
 				firstErr = err
 			}
 		}
@@ -130,10 +133,10 @@ func (s *Sender) SendUDP(srcIP net.IP, srcPort uint16, dstIP net.IP, dstPort uin
 		s.pktPool.Put(bp)
 	}()
 
-	sa := &syscall.SockaddrInet4{Addr: [4]byte{d4[0], d4[1], d4[2], d4[3]}}
+	sa := &unix.SockaddrInet4{Addr: [4]byte{d4[0], d4[1], d4[2], d4[3]}}
 	sh := s.pickShard()
 	sh.mu.Lock()
-	err := syscall.Sendto(sh.fd, pkt, 0, sa)
+	err := unix.Sendto(sh.fd, pkt, 0, sa)
 	sh.mu.Unlock()
 	if err != nil {
 		return fmt.Errorf("sendto: %w", err)
@@ -194,7 +197,7 @@ func buildIPv4UDPPacket(buf []byte, s4, d4 net.IP, srcPort, dstPort uint16, payl
 	binary.BigEndian.PutUint16(pkt[4:6], 0)
 	binary.BigEndian.PutUint16(pkt[6:8], 0)
 	pkt[8] = 64
-	pkt[9] = syscall.IPPROTO_UDP
+	pkt[9] = unix.IPPROTO_UDP
 	pkt[10] = 0
 	pkt[11] = 0
 	copy(pkt[12:16], s4)
@@ -242,7 +245,7 @@ func udpChecksumIPv4(src, dst net.IP, udpPacket []byte) uint16 {
 	for i := 0; i < 4; i += 2 {
 		sum += uint32(binary.BigEndian.Uint16(d[i : i+2]))
 	}
-	sum += uint32(syscall.IPPROTO_UDP)
+	sum += uint32(unix.IPPROTO_UDP)
 	sum += uint32(len(udpPacket))
 	n := len(udpPacket)
 	for i := 0; i < n-1; i += 2 {

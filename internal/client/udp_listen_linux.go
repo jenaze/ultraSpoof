@@ -7,14 +7,9 @@ import (
 	"fmt"
 	"net"
 	"syscall"
+
+	"golang.org/x/sys/unix"
 )
-
-// soReusePort مقدار SO_REUSEPORT روی Linux (ثابت پکیج syscall نیست ولی همیشه 15 است).
-const soReusePort = 0xf
-
-// soRcvBufForce مقدار SO_RCVBUFFORCE روی Linux. اگر CAP_NET_ADMIN داشته باشیم،
-// سقف net.core.rmem_max را دور می‌زند.
-const soRcvBufForce = 33
 
 // listenUDPReusePort یک سوکت UDP با SO_REUSEPORT می‌سازد. اگر چند سوکت با همان
 // آدرس bind شوند، کرنل بسته‌های ورودی را بر اساس هش 4-tuple بین آن‌ها توزیع می‌کند
@@ -24,19 +19,18 @@ func listenUDPReusePort(addr string, recvBufBytes int) (*net.UDPConn, error) {
 		Control: func(network, address string, c syscall.RawConn) error {
 			var ctlErr error
 			err := c.Control(func(fd uintptr) {
-				if e := syscall.SetsockoptInt(int(fd), syscall.SOL_SOCKET, syscall.SO_REUSEADDR, 1); e != nil {
+				if e := unix.SetsockoptInt(int(fd), unix.SOL_SOCKET, unix.SO_REUSEADDR, 1); e != nil {
 					ctlErr = fmt.Errorf("SO_REUSEADDR: %w", e)
 					return
 				}
-				// SO_REUSEPORT روی بعضی نسخه‌ها ثابت پکیجی نیست؛ از مقدار 15 یا x/sys استفاده می‌شود.
-				if e := syscall.SetsockoptInt(int(fd), syscall.SOL_SOCKET, soReusePort, 1); e != nil {
+				if e := unix.SetsockoptInt(int(fd), unix.SOL_SOCKET, unix.SO_REUSEPORT, 1); e != nil {
 					ctlErr = fmt.Errorf("SO_REUSEPORT: %w", e)
 					return
 				}
 				if recvBufBytes > 0 {
-					_ = syscall.SetsockoptInt(int(fd), syscall.SOL_SOCKET, syscall.SO_RCVBUF, recvBufBytes)
+					_ = unix.SetsockoptInt(int(fd), unix.SOL_SOCKET, unix.SO_RCVBUF, recvBufBytes)
 					// اگر CAP_NET_ADMIN داشته باشیم، سقف net.core.rmem_max را دور می‌زند.
-					_ = syscall.SetsockoptInt(int(fd), syscall.SOL_SOCKET, soRcvBufForce, recvBufBytes)
+					_ = unix.SetsockoptInt(int(fd), unix.SOL_SOCKET, unix.SO_RCVBUFFORCE, recvBufBytes)
 				}
 			})
 			if err != nil {

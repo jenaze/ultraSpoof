@@ -52,7 +52,7 @@ func sendmmsgIPv4(fd int, d4 net.IP, pkts [][]byte) error {
 			if errno == syscall.EINTR {
 				continue
 			}
-			if errno == syscall.EAGAIN {
+			if errno == syscall.EAGAIN || errno == syscall.ENOBUFS {
 				// بافر کرنل پر است؛ یک تک بسته را با Sendto بفرست تا فشار آزاد شود.
 				p := pkts[sent]
 				saSingle := &syscall.SockaddrInet4{Addr: [4]byte{d4[0], d4[1], d4[2], d4[3]}}
