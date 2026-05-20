@@ -1,0 +1,60 @@
+//go:build linux
+
+package client
+
+import (
+	"context"
+	"fmt"
+	"net"
+	"syscall"
+)
+
+// soReusePort مقدار SO_REUSEPORT روی Linux (ثابت پکیج syscall نیست ولی همیشه 15 است).
+const soReusePort = 0xf
+
+// soRcvBufForce مقدار SO_RCVBUFFORCE روی Linux. اگر CAP_NET_ADMIN داشته باشیم،
+// سقف net.core.rmem_max را دور می‌زند.
+const soRcvBufForce = 33
+
+// listenUDPReusePort یک سوکت UDP با SO_REUSEPORT می‌سازد. اگر چند سوکت با همان
+// آدرس bind شوند، کرنل بسته‌های ورودی را بر اساس هش 4-tuple بین آن‌ها توزیع می‌کند
+// تا softirq روی چند CPU پخش شود.
+func listenUDPReusePort(addr string, recvBufBytes int) (*net.UDPConn, error) {
+	lc := net.ListenConfig{
+		Control: func(network, address string, c syscall.RawConn) error {
+			var ctlErr error
+			err := c.Control(func(fd uintptr) {
+				if e := syscall.SetsockoptInt(int(fd), syscall.SOL_SOCKET, syscall.SO_REUSEADDR, 1); e != nil {
+					ctlErr = fmt.Errorf("SO_REUSEADDR: %w", e)
+					return
+				}
+				// SO_REUSEPORT روی بعضی نسخه‌ها ثابت پکیجی نیست؛ از مقدار 15 یا x/sys استفاده می‌شود.
+				if e := syscall.SetsockoptInt(int(fd), syscall.SOL_SOCKET, soReusePort, 1); e != nil {
+					ctlErr = fmt.Errorf("SO_REUSEPORT: %w", e)
+					return
+				}
+				if recvBufBytes > 0 {
+					_ = syscall.SetsockoptInt(int(fd), syscall.SOL_SOCKET, syscall.SO_RCVBUF, recvBufBytes)
+					// اگر CAP_NET_ADMIN داشته باشیم، سقف net.core.rmem_max را دور می‌زند.
+					_ = syscall.SetsockoptInt(int(fd), syscall.SOL_SOCKET, soRcvBufForce, recvBufBytes)
+				}
+			})
+			if err != nil {
+				return err
+			}
+			return ctlErr
+		},
+	}
+	// "udp4" به جای "udp": تضمین می‌کند سوکت AF_INET (نه AF_INET6 dual-stack) باشد
+	// تا ساختار sockaddr در recvmmsg همیشه sockaddr_in (۱۶ بایت) باشد.
+	pc, err := lc.ListenPacket(context.Background(), "udp4", addr)
+	if err != nil {
+		return nil, err
+	}
+	uc, ok := pc.(*net.UDPConn)
+	if !ok {
+		_ = pc.Close()
+		return nil, fmt.Errorf("expected *net.UDPConn, got %T", pc)
+	}
+	return uc, nil
+}

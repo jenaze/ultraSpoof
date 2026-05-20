@@ -1,0 +1,48 @@
+{
+  "mode": "client",
+  "psk": "dGVzdC1wYXNzd29yZC0zMi1ieXRlcy1rZXkhISE=",
+  "log_level": "info",
+  "tunmod": {
+    "enabled": false,
+    "device_name": "ultra0",
+    "local_cidr": "10.10.10.2/24",
+    "peer_cidr": "10.10.10.1/24",
+    "mtu": 1400,
+    "keepalive_sec": 20,
+    "reconnect_delay_sec": 3,
+    "reconnect_delay_ms": 50
+  },
+  "client": {
+    "listen": {
+      "socks": "127.0.0.1:1080"
+    },
+    "upstream_socks": "direct",
+    "remote": "127.0.0.1:51123",
+    "fast_recovery": true,
+    "control_dial_retries": 8,
+    "control_dial_retry_interval_ms": 150,
+    "download": {
+      "listen_udp": "0.0.0.0:9444",
+      "spoof_source_ip": "194.225.101.22",
+      "receive_timeout": "180s",
+
+      "encryption": "none",
+
+      "socket_recv_buffer_bytes": 134217728,
+      "recv_workers": 0,
+      "session_queue_size": 131072,
+      "recv_sockets": 1,
+      "recv_batch_size": 64,
+
+      "nack_interval_ms": 30,
+      "nack_max_tries": 25,
+      "skip_timeout_ms": 1500,
+      "nack_lookahead": 16384,
+      "max_pending_packets": 262144,
+      "nack_tick_ms": 5,
+      "skip_check_ms": 25,
+      "stats_interval_sec": 5
+    },
+    "protocol_version": 1
+  }
+}

@@ -1,0 +1,917 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>UltraSpoof Config Calculator</title>
+<style>
+  /* ریست و متغیرهای رنگ تم تیره */
+  *, *::before, *::after { box-sizing: border-box; }
+  :root {
+    --bg: #0b1020;
+    --bg-elev: #141a2e;
+    --bg-elev-2: #1c2340;
+    --border: #2a3358;
+    --text: #e6e9f2;
+    --text-dim: #9aa3c0;
+    --accent: #7c9cff;
+    --accent-2: #5af0c9;
+    --warn: #ffb86b;
+    --danger: #ff6b8a;
+    --ok: #5af0a0;
+    --mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  }
+  html, body { margin: 0; padding: 0; background: var(--bg); color: var(--text); font-family: system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, sans-serif; }
+  body { min-height: 100vh; }
+  a { color: var(--accent); }
+
+  header {
+    padding: 24px 32px;
+    border-bottom: 1px solid var(--border);
+    background: linear-gradient(180deg, #121733 0%, #0b1020 100%);
+  }
+  header h1 { margin: 0 0 6px 0; font-size: 22px; letter-spacing: .3px; }
+  header p { margin: 0; color: var(--text-dim); font-size: 13px; }
+
+  main {
+    display: grid;
+    grid-template-columns: 380px 1fr;
+    gap: 20px;
+    padding: 20px 32px 60px;
+    max-width: 1600px;
+    margin: 0 auto;
+  }
+  @media (max-width: 1000px) { main { grid-template-columns: 1fr; } }
+
+  .card {
+    background: var(--bg-elev);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    overflow: hidden;
+  }
+  .card h2 {
+    margin: 0;
+    padding: 14px 18px;
+    font-size: 13px;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    color: var(--text-dim);
+    border-bottom: 1px solid var(--border);
+    background: var(--bg-elev-2);
+  }
+  .card .body { padding: 16px 18px; }
+
+  label { display: block; font-size: 12px; color: var(--text-dim); margin-bottom: 6px; }
+  .field { margin-bottom: 14px; }
+  .field-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+
+  input[type="number"], input[type="text"], select {
+    width: 100%;
+    background: var(--bg-elev-2);
+    border: 1px solid var(--border);
+    color: var(--text);
+    padding: 9px 11px;
+    border-radius: 8px;
+    font-size: 13px;
+    font-family: var(--mono);
+    outline: none;
+    transition: border-color .15s;
+  }
+  input:focus, select:focus { border-color: var(--accent); }
+
+  .slider-row { display: flex; align-items: center; gap: 10px; }
+  .slider-row input[type="range"] { flex: 1; accent-color: var(--accent); }
+  .slider-row input[type="number"] { width: 100px; }
+  .unit { color: var(--text-dim); font-size: 12px; white-space: nowrap; }
+
+  .presets { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 14px; }
+  .preset-btn {
+    background: var(--bg-elev-2);
+    border: 1px solid var(--border);
+    color: var(--text);
+    padding: 6px 10px;
+    border-radius: 8px;
+    font-size: 12px;
+    cursor: pointer;
+    transition: all .15s;
+  }
+  .preset-btn:hover { border-color: var(--accent); color: var(--accent); }
+  .preset-btn.active { background: var(--accent); color: #0b1020; border-color: var(--accent); }
+
+  /* نمای آمار و اعداد مشتق‌شده */
+  .stats-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+    gap: 10px;
+  }
+  .stat {
+    background: var(--bg-elev-2);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 10px 12px;
+  }
+  .stat .k { font-size: 11px; color: var(--text-dim); text-transform: uppercase; letter-spacing: .5px; }
+  .stat .v { font-family: var(--mono); font-size: 16px; color: var(--text); margin-top: 4px; }
+  .stat.warn .v { color: var(--warn); }
+  .stat.danger .v { color: var(--danger); }
+  .stat.ok .v { color: var(--ok); }
+
+  /* تب‌های خروجی */
+  .tabs {
+    display: flex;
+    border-bottom: 1px solid var(--border);
+    background: var(--bg-elev-2);
+  }
+  .tab {
+    padding: 12px 18px;
+    font-size: 13px;
+    color: var(--text-dim);
+    cursor: pointer;
+    border-bottom: 2px solid transparent;
+    user-select: none;
+  }
+  .tab.active { color: var(--text); border-bottom-color: var(--accent); background: var(--bg-elev); }
+  .tab:hover:not(.active) { color: var(--text); }
+
+  .pane { display: none; position: relative; }
+  .pane.active { display: block; }
+
+  pre.code {
+    margin: 0;
+    padding: 18px 22px;
+    font-family: var(--mono);
+    font-size: 12.5px;
+    line-height: 1.55;
+    color: #d7dcee;
+    background: #0a0f22;
+    overflow-x: auto;
+    white-space: pre;
+    max-height: 560px;
+    overflow-y: auto;
+  }
+  .copy-btn {
+    position: absolute;
+    top: 10px;
+    right: 12px;
+    background: var(--bg-elev-2);
+    border: 1px solid var(--border);
+    color: var(--text);
+    padding: 6px 12px;
+    border-radius: 8px;
+    font-size: 12px;
+    cursor: pointer;
+    transition: all .15s;
+  }
+  .copy-btn:hover { border-color: var(--accent); color: var(--accent); }
+  .copy-btn.copied { background: var(--ok); color: #0b1020; border-color: var(--ok); }
+
+  /* هشدارها */
+  .alerts { display: flex; flex-direction: column; gap: 8px; }
+  .alert {
+    padding: 10px 12px;
+    border-radius: 8px;
+    font-size: 12.5px;
+    border: 1px solid transparent;
+    line-height: 1.5;
+  }
+  .alert.warn { background: rgba(255, 184, 107, 0.08); border-color: rgba(255, 184, 107, 0.35); color: #ffd3a0; }
+  .alert.danger { background: rgba(255, 107, 138, 0.1); border-color: rgba(255, 107, 138, 0.4); color: #ff9db1; }
+  .alert.info { background: rgba(124, 156, 255, 0.08); border-color: rgba(124, 156, 255, 0.35); color: #c0ccff; }
+  .alert b { color: inherit; }
+
+  /* توکن‌های برجسته در خروجی JSON */
+  .jkey { color: #9ab8ff; }
+  .jstr { color: #98e0a6; }
+  .jnum { color: #f0b57a; }
+  .jbool { color: #ff9db1; }
+
+  /* افکت رنگ sticky برای ستون خروجی */
+  .outputs { display: flex; flex-direction: column; gap: 20px; }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>UltraSpoof Config Calculator</h1>
+  <p>Compute optimal <code>server.yaml</code>, <code>client.yaml</code> and Linux sysctl values from a single throughput target.</p>
+</header>
+
+<main>
+  <!-- ستون ورودی‌ها -->
+  <aside class="outputs">
+    <section class="card">
+      <h2>Throughput Target</h2>
+      <div class="body">
+        <div class="presets" id="presets">
+          <button class="preset-btn" data-mbps="100">100 Mbps</button>
+          <button class="preset-btn" data-mbps="300">300 Mbps</button>
+          <button class="preset-btn" data-mbps="500">500 Mbps</button>
+          <button class="preset-btn" data-mbps="900">900 Mbps</button>
+          <button class="preset-btn" data-mbps="1500">1.5 Gbps</button>
+          <button class="preset-btn active" data-mbps="2000">2 Gbps</button>
+          <button class="preset-btn" data-mbps="3000">3 Gbps</button>
+          <button class="preset-btn" data-mbps="5000">5 Gbps</button>
+          <button class="preset-btn" data-mbps="10000">10 Gbps</button>
+        </div>
+
+        <div class="field">
+          <label>Target total throughput (Mbps)</label>
+          <div class="slider-row">
+            <input id="mbps" type="range" min="50" max="10000" step="50" value="2000" />
+            <input id="mbpsNum" type="number" min="1" max="40000" step="1" value="2000" />
+            <span class="unit">Mbps</span>
+          </div>
+        </div>
+
+        <div class="field-row">
+          <div class="field">
+            <label>Max chunk size (bytes)</label>
+            <input id="chunk" type="number" min="256" max="60000" value="1400" />
+          </div>
+          <div class="field">
+            <label>Skip timeout (ms)</label>
+            <input id="skipMs" type="number" min="200" max="10000" step="50" value="1500" />
+          </div>
+        </div>
+
+        <div class="field-row">
+          <div class="field">
+            <label>Encryption</label>
+            <select id="enc">
+              <option value="none" selected>none (plain, fastest)</option>
+              <option value="aead">aead (AES-GCM)</option>
+            </select>
+          </div>
+          <div class="field">
+            <label>Concurrent sessions</label>
+            <input id="sessions" type="number" min="1" max="1000" value="1" />
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="card">
+      <h2>Server Side (Turkey)</h2>
+      <div class="body">
+        <div class="field-row">
+          <div class="field">
+            <label>CPU cores</label>
+            <input id="srvCpu" type="number" min="1" max="256" value="8" />
+          </div>
+          <div class="field">
+            <label>RAM (GB)</label>
+            <input id="srvRam" type="number" min="1" max="2048" value="8" />
+          </div>
+        </div>
+        <div class="field-row">
+          <div class="field">
+            <label>TCP listen (host:port)</label>
+            <input id="srvListenTcp" type="text" value="0.0.0.0:9443" />
+          </div>
+          <div class="field">
+            <label>Iran UDP port</label>
+            <input id="iranUdpPort" type="number" min="1" max="65535" value="9444" />
+          </div>
+        </div>
+        <div class="field-row">
+          <div class="field">
+            <label>Iran IP (dest)</label>
+            <input id="iranIp" type="text" value="92.242.220.190" />
+          </div>
+          <div class="field">
+            <label>Spoof source IP</label>
+            <input id="spoofIp" type="text" value="194.225.101.22" />
+          </div>
+        </div>
+        <div class="field">
+          <label>Spoof source UDP port (0 = dynamic)</label>
+          <input id="spoofPort" type="number" min="0" max="65535" value="0" />
+        </div>
+      </div>
+    </section>
+
+    <section class="card">
+      <h2>Client Side (Iran)</h2>
+      <div class="body">
+        <div class="field-row">
+          <div class="field">
+            <label>CPU cores</label>
+            <input id="cliCpu" type="number" min="1" max="256" value="8" />
+          </div>
+          <div class="field">
+            <label>RAM (GB)</label>
+            <input id="cliRam" type="number" min="1" max="2048" value="8" />
+          </div>
+        </div>
+        <div class="field-row">
+          <div class="field">
+            <label>SOCKS listen</label>
+            <input id="socksListen" type="text" value="127.0.0.1:1080" />
+          </div>
+          <div class="field">
+            <label>Upstream SOCKS (or "direct")</label>
+            <input id="upstream" type="text" value="direct" />
+          </div>
+        </div>
+        <div class="field-row">
+          <div class="field">
+            <label>Remote (server):port</label>
+            <input id="remote" type="text" value="185.226.93.120:9443" />
+          </div>
+          <div class="field">
+            <label>Listen UDP</label>
+            <input id="listenUdp" type="text" value="0.0.0.0:9444" />
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="card">
+      <h2>Shared</h2>
+      <div class="body">
+        <div class="field">
+          <label>PSK (base64 or raw)</label>
+          <input id="psk" type="text" value="dGVzdC1wYXNzd29yZC0zMi1ieXRlcy1rZXkhISE=" />
+        </div>
+        <div class="field">
+          <label>Log level</label>
+          <select id="logLevel">
+            <option value="off">off</option>
+            <option value="info" selected>info</option>
+            <option value="debug">debug</option>
+          </select>
+        </div>
+      </div>
+    </section>
+  </aside>
+
+  <!-- ستون خروجی -->
+  <section class="outputs">
+    <div class="card">
+      <h2>Derived Metrics</h2>
+      <div class="body">
+        <div class="stats-grid" id="stats"></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>Warnings</h2>
+      <div class="body">
+        <div class="alerts" id="alerts"></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="tabs" id="tabs">
+        <div class="tab active" data-pane="server">server.yaml</div>
+        <div class="tab" data-pane="client">client.yaml</div>
+        <div class="tab" data-pane="sysctl-srv">sysctl (Turkey)</div>
+        <div class="tab" data-pane="sysctl-cli">sysctl (Iran)</div>
+        <div class="tab" data-pane="notes">Deploy Notes</div>
+      </div>
+      <div class="pane active" id="pane-server">
+        <button class="copy-btn" data-target="code-server">Copy</button>
+        <pre class="code" id="code-server"></pre>
+      </div>
+      <div class="pane" id="pane-client">
+        <button class="copy-btn" data-target="code-client">Copy</button>
+        <pre class="code" id="code-client"></pre>
+      </div>
+      <div class="pane" id="pane-sysctl-srv">
+        <button class="copy-btn" data-target="code-sysctl-srv">Copy</button>
+        <pre class="code" id="code-sysctl-srv"></pre>
+      </div>
+      <div class="pane" id="pane-sysctl-cli">
+        <button class="copy-btn" data-target="code-sysctl-cli">Copy</button>
+        <pre class="code" id="code-sysctl-cli"></pre>
+      </div>
+      <div class="pane" id="pane-notes">
+        <pre class="code" id="code-notes"></pre>
+      </div>
+    </div>
+  </section>
+</main>
+
+<script>
+/* ===== ابزارهای کمکی ریاضی ===== */
+
+// گرد به بالا به نزدیک‌ترین توان ۲ (حداقل min)
+function nextPow2(n, min) {
+  min = min || 1;
+  let v = Math.max(n, min);
+  let p = 1;
+  while (p < v) p <<= 1;
+  return p;
+}
+
+// محدود کردن مقدار بین min و max
+const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
+
+// فرمت مگابایت/گیگابایت
+function fmtBytes(n) {
+  if (n >= 1024*1024*1024) return (n / (1024*1024*1024)).toFixed(2) + ' GB';
+  if (n >= 1024*1024) return (n / (1024*1024)).toFixed(1) + ' MB';
+  if (n >= 1024) return (n / 1024).toFixed(0) + ' KB';
+  return n + ' B';
+}
+function fmtNum(n) { return n.toLocaleString('en-US'); }
+function fmtMbps(n) { return n >= 1000 ? (n/1000).toFixed(2) + ' Gbps' : n + ' Mbps'; }
+
+/* ===== هستهٔ محاسبات ===== */
+
+// overhead تقریبی بر بسته (IP + UDP + پروتکل داخلی)
+const UDP_PLAIN_PROTO_OVERHEAD = 23;   // از protocol.UDPPlainModeOverhead
+const UDP_AEAD_PROTO_OVERHEAD  = 50;   // تقریب برای nonce/tag/header
+const IP_UDP_HEADER_OVERHEAD   = 28;   // IPv4 + UDP header
+
+function computePlan(inputs) {
+  const mbps      = inputs.mbps;
+  const chunk     = inputs.chunk;
+  const skipMs    = inputs.skipMs;
+  const enc       = inputs.enc;
+  const sessions  = inputs.sessions;
+  const srvCpu    = inputs.srvCpu;
+  const srvRam    = inputs.srvRam * 1024 * 1024 * 1024;
+  const cliCpu    = inputs.cliCpu;
+  const cliRam    = inputs.cliRam * 1024 * 1024 * 1024;
+
+  // سربار هر بسته روی سیم (IP+UDP+payload کامل)
+  const protoOverhead = enc === 'aead' ? UDP_AEAD_PROTO_OVERHEAD : UDP_PLAIN_PROTO_OVERHEAD;
+  const payloadPerPkt = chunk; // chunk خود حداکثر payload داخل UDP است
+  const wirePerPkt    = chunk + IP_UDP_HEADER_OVERHEAD;
+
+  const bytesPerSec = mbps * 1e6 / 8;
+  const pps = Math.ceil(bytesPerSec / chunk);
+
+  // ring retransmit: ۲ برابر پنجرهٔ skip (حاشیهٔ ایمن برای NACK رفت/برگشت)
+  const retxNeeded = Math.ceil(pps * (skipMs / 1000) * 2);
+  const retxPackets = clamp(nextPow2(retxNeeded, 16384), 1024, 1048576);
+
+  // صف سشن کلاینت: پوشش ۱ ثانیه burst
+  const sessionQueue = clamp(nextPow2(pps * 1.0, 32768), 1024, 4194304);
+
+  // pending out-of-order
+  const maxPending = sessionQueue;
+
+  // nack lookahead: حدود ۱۲۵ms معادل pps
+  const nackLookahead = clamp(nextPow2(Math.ceil(pps * 0.125), 4096), 256, 1000000);
+
+  // ===== سرور =====
+  // worker ها = min(16, srvCpu) ولی بزرگ‌تر از ۲ برای parallelism
+  const sendWorkers = clamp(Math.min(16, Math.max(2, srvCpu)), 1, 64);
+
+  // batch size با افزایش pps بزرگ‌تر می‌شود
+  let sendBatch;
+  if (mbps < 200)      sendBatch = 64;
+  else if (mbps < 800) sendBatch = 128;
+  else if (mbps < 2500) sendBatch = 256;
+  else                  sendBatch = 512;
+  sendBatch = clamp(sendBatch, 1, 1024);
+
+  // pipeline slots: حداقل ۸، دو برابر worker تا reader پشت نماند
+  const pipelineSlots = clamp(Math.max(8, sendWorkers * 2), 2, 64);
+
+  // بافر خواندن از TCP مقصد: ~۵۰ms از bandwidth
+  const targetReadBuf = clamp(
+    nextPow2(Math.ceil(bytesPerSec * 0.05), 1024*1024),
+    1024*1024, 64*1024*1024
+  );
+
+  // SO_SNDBUF روی raw socket: ۰.۵ ثانیه bandwidth
+  const sockSendBuf = clamp(
+    nextPow2(Math.ceil(bytesPerSec * 0.5), 32*1024*1024),
+    32*1024*1024, 512*1024*1024
+  );
+
+  // ===== کلاینت =====
+  const recvWorkers = clamp(Math.min(32, Math.max(4, cliCpu * 2)), 1, 64);
+  const recvSockets = clamp(Math.min(16, Math.max(2, Math.floor(cliCpu / 2))), 1, 64);
+
+  let recvBatch;
+  if (mbps < 200)       recvBatch = 128;
+  else if (mbps < 800)  recvBatch = 256;
+  else if (mbps < 2500) recvBatch = 512;
+  else                   recvBatch = 1024;
+  recvBatch = clamp(recvBatch, 1, 1024);
+
+  // SO_RCVBUF: ۱ ثانیه bandwidth (اصلی‌ترین پارامتر برای جلوگیری از drop)
+  const sockRecvBuf = clamp(
+    nextPow2(Math.ceil(bytesPerSec * 1.0), 64*1024*1024),
+    64*1024*1024, 2 * 1024*1024*1024
+  );
+
+  // NACK tuning (مستقل از throughput عمدتاً)
+  const nackInterval = 25;
+  const nackMaxTries = 30;
+  const nackTickMs = 5;
+  const skipCheckMs = 25;
+
+  // ===== مصرف RAM =====
+  // هر session روی سرور: ring × (chunk + overhead) + pipeline buffers
+  const ringPerSession = retxPackets * (chunk + 64); // ~chunk+header+padding
+  const pipelinePerSession = pipelineSlots * sendBatch * (chunk + 128);
+  const srvRamPerSession = ringPerSession + pipelinePerSession;
+  const srvRamTotal = srvRamPerSession * sessions + sockSendBuf * sendWorkers;
+
+  // کلاینت: sock buffer × recvSockets + queue × chunk × sessions + pending
+  const cliRamTotal =
+    sockRecvBuf * recvSockets +
+    (sessionQueue + maxPending) * (chunk + 128) * sessions;
+
+  // ===== sysctl =====
+  const sysctl = {
+    rmemMax: Math.max(sockRecvBuf, 64*1024*1024),
+    wmemMax: Math.max(sockSendBuf, 32*1024*1024),
+    rmemDefault: Math.min(sockRecvBuf, 256*1024*1024),
+    wmemDefault: Math.min(sockSendBuf, 128*1024*1024),
+    netdevBacklog: clamp(Math.ceil(pps * 2), 100000, 2000000),
+    optmemMax: 131072,
+    udpMemLow: Math.ceil(sockRecvBuf / 4096 / 4),
+    udpMemPressure: Math.ceil(sockRecvBuf / 4096 / 2),
+    udpMemHigh: Math.ceil(sockRecvBuf / 4096),
+    udpRmemMin: 262144,
+    udpWmemMin: 262144,
+  };
+
+  return {
+    // مشتق‌شده‌ها
+    pps, wirePerPkt, payloadPerPkt, bytesPerSec,
+    retxPackets, sessionQueue, maxPending, nackLookahead,
+    sendWorkers, sendBatch, pipelineSlots, targetReadBuf, sockSendBuf,
+    recvWorkers, recvSockets, recvBatch, sockRecvBuf,
+    nackInterval, nackMaxTries, nackTickMs, skipCheckMs,
+    srvRamPerSession, srvRamTotal, cliRamTotal,
+    srvRam, cliRam,
+    sysctl,
+  };
+}
+
+/* ===== ساخت YAML/JSON خروجی ===== */
+
+function buildServerYaml(i, p) {
+  const obj = {
+    mode: "server",
+    psk: i.psk,
+    log_level: i.logLevel,
+    server: {
+      listen: { tcp: i.srvListenTcp },
+      download: {
+        iran_ip: i.iranIp,
+        iran_udp_port: i.iranUdpPort,
+        spoof_source_ip: i.spoofIp,
+        spoof_udp_source_port: i.spoofPort,
+        interface: "",
+        max_chunk_size: i.chunk,
+        encryption: i.enc,
+        max_total_mbps: i.mbps,
+        max_session_mbps: 0,
+        target_read_buffer_bytes: p.targetReadBuf,
+        send_batch_size: p.sendBatch,
+        send_workers: p.sendWorkers,
+        skip_udp_checksum: i.enc === 'none',
+        socket_send_buffer_bytes: p.sockSendBuf,
+        pipeline_slots: p.pipelineSlots,
+        retransmit_buffer_packets: p.retxPackets
+      },
+      protocol_version: 1
+    }
+  };
+  return JSON.stringify(obj, null, 2);
+}
+
+function buildClientYaml(i, p) {
+  const obj = {
+    mode: "client",
+    psk: i.psk,
+    log_level: i.logLevel,
+    client: {
+      listen: { socks: i.socksListen },
+      upstream_socks: i.upstream,
+      remote: i.remote,
+      download: {
+        listen_udp: i.listenUdp,
+        spoof_source_ip: i.spoofIp,
+        receive_timeout: "60s",
+        encryption: i.enc,
+        socket_recv_buffer_bytes: p.sockRecvBuf,
+        recv_workers: p.recvWorkers,
+        session_queue_size: p.sessionQueue,
+        recv_sockets: p.recvSockets,
+        recv_batch_size: p.recvBatch,
+        nack_interval_ms: p.nackInterval,
+        nack_max_tries: p.nackMaxTries,
+        skip_timeout_ms: i.skipMs,
+        nack_lookahead: p.nackLookahead,
+        max_pending_packets: p.maxPending,
+        nack_tick_ms: p.nackTickMs,
+        skip_check_ms: p.skipCheckMs,
+        stats_interval_sec: 5
+      },
+      protocol_version: 1
+    }
+  };
+  return JSON.stringify(obj, null, 2);
+}
+
+function buildSysctl(role, p) {
+  const s = p.sysctl;
+  const who = role === 'srv' ? 'Turkey (sender)' : 'Iran (receiver)';
+  return (
+`# ---- sysctl tuning for UltraSpoof on ${who} ----
+# قبل از اجرای باینری این مقادیر را اعمال کن
+
+sudo sysctl -w net.core.rmem_max=${s.rmemMax}
+sudo sysctl -w net.core.wmem_max=${s.wmemMax}
+sudo sysctl -w net.core.rmem_default=${s.rmemDefault}
+sudo sysctl -w net.core.wmem_default=${s.wmemDefault}
+sudo sysctl -w net.core.netdev_max_backlog=${s.netdevBacklog}
+sudo sysctl -w net.core.optmem_max=${s.optmemMax}
+sudo sysctl -w net.ipv4.udp_mem="${s.udpMemLow} ${s.udpMemPressure} ${s.udpMemHigh}"
+sudo sysctl -w net.ipv4.udp_rmem_min=${s.udpRmemMin}
+sudo sysctl -w net.ipv4.udp_wmem_min=${s.udpWmemMin}
+
+# پایدار بعد از ریبوت:
+sudo tee /etc/sysctl.d/99-ultraspoof.conf >/dev/null <<'EOF'
+net.core.rmem_max=${s.rmemMax}
+net.core.wmem_max=${s.wmemMax}
+net.core.rmem_default=${s.rmemDefault}
+net.core.wmem_default=${s.wmemDefault}
+net.core.netdev_max_backlog=${s.netdevBacklog}
+net.core.optmem_max=${s.optmemMax}
+net.ipv4.udp_mem=${s.udpMemLow} ${s.udpMemPressure} ${s.udpMemHigh}
+net.ipv4.udp_rmem_min=${s.udpRmemMin}
+net.ipv4.udp_wmem_min=${s.udpWmemMin}
+EOF
+sudo sysctl --system
+`);
+}
+
+function buildNotes(i, p) {
+  const srvRamPct = (p.srvRamTotal / p.srvRam * 100).toFixed(0);
+  const cliRamPct = (p.cliRamTotal / p.cliRam * 100).toFixed(0);
+  const perSessionMB = (p.srvRamPerSession / 1024 / 1024).toFixed(0);
+  return (
+`# Deployment Notes
+
+## Capacity math
+  target throughput   : ${fmtMbps(i.mbps)}
+  chunk size          : ${i.chunk} bytes (payload)
+  wire size per pkt   : ${p.wirePerPkt} bytes (incl IP+UDP)
+  packet rate         : ${fmtNum(p.pps)} pps
+  skip window         : ${i.skipMs} ms
+  encryption mode     : ${i.enc}
+  concurrent sessions : ${i.sessions}
+
+## Ring/queue sizing (rationale)
+  retransmit_buffer_packets = ${fmtNum(p.retxPackets)}
+      (pps × skip × 2 safety factor, rounded up to power of 2)
+  session_queue_size        = ${fmtNum(p.sessionQueue)}
+      (covers ~1s of bursts on the client)
+  max_pending_packets       = ${fmtNum(p.maxPending)}
+  nack_lookahead            = ${fmtNum(p.nackLookahead)}
+      (~125ms worth of packets scanned per NACK tick)
+
+## Server (Turkey) memory budget
+  ring per session       : ~${perSessionMB} MB
+  pipeline per session   : ~${(p.pipelineSlots * p.sendBatch * (i.chunk+128)/1024/1024).toFixed(1)} MB
+  socket SO_SNDBUF × workers: ${fmtBytes(p.sockSendBuf * p.sendWorkers)}
+  estimated total        : ${fmtBytes(p.srvRamTotal)} (${srvRamPct}% of ${fmtBytes(p.srvRam)})
+
+## Client (Iran) memory budget
+  SO_RCVBUF × sockets    : ${fmtBytes(p.sockRecvBuf * p.recvSockets)}
+  queues × sessions      : ${fmtBytes((p.sessionQueue + p.maxPending) * (i.chunk+128) * i.sessions)}
+  estimated total        : ${fmtBytes(p.cliRamTotal)} (${cliRamPct}% of ${fmtBytes(p.cliRam)})
+
+## Pre-flight checklist
+  1. Physical link capacity ≥ ${fmtMbps(i.mbps)} end-to-end (check with ISP / ethtool).
+  2. Apply sysctl values on BOTH hosts BEFORE starting the binary — kernel silently
+     clamps SO_RCVBUF / SO_SNDBUF if net.core.{rmem,wmem}_max is smaller.
+  3. Enable NIC offload (both hosts):
+       sudo ethtool -K eth0 gso on tso on gro on
+       sudo ethtool -G eth0 rx 4096 tx 4096
+  4. Spread softirq across cores (client host, Iran):
+       sudo systemctl disable --now irqbalance
+       # then set IRQ affinity manually per NIC queue
+  5. Ensure server-side raw socket capability:
+       sudo setcap cap_net_raw,cap_net_admin=eip ./ultraSpoof
+
+## Runtime verification
+  - On server: 'session=... server stats: mbps=...' should converge near ${i.mbps}.
+  - retx_miss should be near 0; if growing, increase retransmit_buffer_packets.
+  - On client: 'cat /proc/net/udp' → column RX-Queue should stay low,
+    drops (column 'drops') should stay near 0.
+  - If client shows frequent 'skip' events, SO_RCVBUF wasn't actually applied
+    (double-check sysctl) or recv_sockets is too low for the CPU topology.
+`);
+}
+
+/* ===== هشدارها ===== */
+
+function buildAlerts(i, p) {
+  const alerts = [];
+  if (p.srvRamTotal > p.srvRam * 0.8) {
+    alerts.push({ type: 'danger', html: `Server estimated RAM usage <b>${fmtBytes(p.srvRamTotal)}</b> exceeds 80% of available <b>${fmtBytes(p.srvRam)}</b>. Reduce <b>retransmit_buffer_packets</b> or lower throughput.` });
+  } else if (p.srvRamTotal > p.srvRam * 0.5) {
+    alerts.push({ type: 'warn', html: `Server RAM usage <b>${fmtBytes(p.srvRamTotal)}</b> is above 50% of <b>${fmtBytes(p.srvRam)}</b>. OK but watch OOM under multiple sessions.` });
+  }
+  if (p.cliRamTotal > p.cliRam * 0.8) {
+    alerts.push({ type: 'danger', html: `Client estimated RAM usage <b>${fmtBytes(p.cliRamTotal)}</b> exceeds 80% of available <b>${fmtBytes(p.cliRam)}</b>. Reduce <b>socket_recv_buffer_bytes</b> or <b>session_queue_size</b>.` });
+  }
+  if (p.retxPackets >= 1048576) {
+    alerts.push({ type: 'warn', html: `<b>retransmit_buffer_packets</b> hit config cap (1,048,576). For this throughput you'd ideally need more, but validator won't accept it. Consider reducing <b>skip_timeout_ms</b>.` });
+  }
+  if (p.retxPackets >= 65536) {
+    alerts.push({ type: 'warn', html: `Large <b>retransmit_buffer_packets=${fmtNum(p.retxPackets)}</b>: per-session server RAM can grow fast. Watch process RSS and reduce if sessions increase.` });
+  }
+  if (p.sockSendBuf >= 128 * 1024 * 1024) {
+    alerts.push({ type: 'warn', html: `High <b>socket_send_buffer_bytes=${fmtBytes(p.sockSendBuf)}</b> per worker. With <b>send_workers=${p.sendWorkers}</b>, kernel socket memory may become very large.` });
+  }
+  if (p.sockRecvBuf >= 256 * 1024 * 1024) {
+    alerts.push({ type: 'warn', html: `High <b>socket_recv_buffer_bytes=${fmtBytes(p.sockRecvBuf)}</b> per socket. With <b>recv_sockets=${p.recvSockets}</b>, client kernel RAM usage may spike.` });
+  }
+  if (p.sessionQueue >= 262144 || p.maxPending >= 262144) {
+    alerts.push({ type: 'warn', html: `Very large client queues (<b>session_queue_size</b>/<b>max_pending_packets</b>) can increase heap usage and GC pressure under burst/loss.` });
+  }
+  if (p.sendWorkers >= 16) {
+    alerts.push({ type: 'warn', html: `High <b>send_workers=${p.sendWorkers}</b> can raise CPU context-switch and lock contention on busy servers.` });
+  }
+  if (p.recvWorkers >= 24) {
+    alerts.push({ type: 'warn', html: `High <b>recv_workers=${p.recvWorkers}</b> can increase client CPU usage; validate with real traffic before production.` });
+  }
+  if (p.recvSockets >= 12) {
+    alerts.push({ type: 'warn', html: `High <b>recv_sockets=${p.recvSockets}</b> increases per-socket kernel memory and may not improve throughput on all kernels.` });
+  }
+  if (i.mbps > 3000 && i.enc === 'aead') {
+    alerts.push({ type: 'warn', html: `AEAD encryption at <b>${fmtMbps(i.mbps)}</b> will likely become CPU-bound. Use <code>encryption: "none"</code> when possible.` });
+  }
+  if (p.sendWorkers * 2 > i.srvCpu) {
+    alerts.push({ type: 'warn', html: `<b>send_workers=${p.sendWorkers}</b> is more than half of server CPU (${i.srvCpu}). Might contend with reader/NACK goroutines.` });
+  }
+  if (p.recvSockets > i.cliCpu) {
+    alerts.push({ type: 'warn', html: `<b>recv_sockets=${p.recvSockets}</b> exceeds client CPU count (${i.cliCpu}); softirq distribution won't improve beyond core count.` });
+  }
+  if (i.mbps >= 5000) {
+    alerts.push({ type: 'info', html: `For sustained ≥5 Gbps you typically need <b>XDP/DPDK</b>-level tooling. The raw-socket + sendmmsg path here tops out somewhere between 3–6 Gbps per session depending on CPU. Consider running multiple sessions in parallel.` });
+  }
+  if (i.mbps <= 100 && p.retxPackets < 16384) {
+    alerts.push({ type: 'info', html: `Low throughput → small ring. For stability at any speed, minimum <b>16,384</b> is recommended.` });
+  }
+  return alerts;
+}
+
+/* ===== رندر ===== */
+
+function getInputs() {
+  return {
+    mbps:         parseInt(document.getElementById('mbpsNum').value) || 100,
+    chunk:        parseInt(document.getElementById('chunk').value) || 1400,
+    skipMs:       parseInt(document.getElementById('skipMs').value) || 1500,
+    enc:          document.getElementById('enc').value,
+    sessions:     parseInt(document.getElementById('sessions').value) || 1,
+    srvCpu:       parseInt(document.getElementById('srvCpu').value) || 1,
+    srvRam:       parseInt(document.getElementById('srvRam').value) || 1,
+    cliCpu:       parseInt(document.getElementById('cliCpu').value) || 1,
+    cliRam:       parseInt(document.getElementById('cliRam').value) || 1,
+    srvListenTcp: document.getElementById('srvListenTcp').value.trim(),
+    iranIp:       document.getElementById('iranIp').value.trim(),
+    iranUdpPort:  parseInt(document.getElementById('iranUdpPort').value) || 9444,
+    spoofIp:      document.getElementById('spoofIp').value.trim(),
+    spoofPort:    parseInt(document.getElementById('spoofPort').value) || 0,
+    socksListen:  document.getElementById('socksListen').value.trim(),
+    upstream:     document.getElementById('upstream').value.trim(),
+    remote:       document.getElementById('remote').value.trim(),
+    listenUdp:    document.getElementById('listenUdp').value.trim(),
+    psk:          document.getElementById('psk').value.trim(),
+    logLevel:     document.getElementById('logLevel').value,
+  };
+}
+
+// رنگ‌آمیزی سادهٔ JSON برای نمایش
+function colorizeJson(s) {
+  return s
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    .replace(/("(?:\\.|[^"\\])*")(\s*:)/g, '<span class="jkey">$1</span>$2')
+    .replace(/:\s*("(?:\\.|[^"\\])*")/g, ': <span class="jstr">$1</span>')
+    .replace(/:\s*(true|false|null)/g, ': <span class="jbool">$1</span>')
+    .replace(/:\s*(-?\d+(\.\d+)?)/g, ': <span class="jnum">$1</span>');
+}
+
+function renderStats(p, i) {
+  const ramSrvPct = p.srvRamTotal / p.srvRam;
+  const ramCliPct = p.cliRamTotal / p.cliRam;
+  const ramSrvCls = ramSrvPct > 0.8 ? 'danger' : ramSrvPct > 0.5 ? 'warn' : 'ok';
+  const ramCliCls = ramCliPct > 0.8 ? 'danger' : ramCliPct > 0.5 ? 'warn' : 'ok';
+  const items = [
+    { k: 'Packet rate', v: fmtNum(p.pps) + ' pps' },
+    { k: 'Retx ring',   v: fmtNum(p.retxPackets) + ' pkts' },
+    { k: 'Ring memory (per sess)', v: fmtBytes(p.srvRamPerSession) },
+    { k: 'Server total RAM', v: fmtBytes(p.srvRamTotal), cls: ramSrvCls },
+    { k: 'Client total RAM', v: fmtBytes(p.cliRamTotal), cls: ramCliCls },
+    { k: 'Server SO_SNDBUF (per worker)', v: fmtBytes(p.sockSendBuf) },
+    { k: 'Client SO_RCVBUF (per socket)', v: fmtBytes(p.sockRecvBuf) },
+    { k: 'Send workers', v: p.sendWorkers },
+    { k: 'Send batch',   v: p.sendBatch },
+    { k: 'Pipeline',     v: p.pipelineSlots },
+    { k: 'Recv sockets', v: p.recvSockets },
+    { k: 'Recv workers', v: p.recvWorkers },
+    { k: 'Recv batch',   v: p.recvBatch },
+    { k: 'Session queue',v: fmtNum(p.sessionQueue) },
+  ];
+  const html = items.map(x => `<div class="stat ${x.cls||''}"><div class="k">${x.k}</div><div class="v">${x.v}</div></div>`).join('');
+  document.getElementById('stats').innerHTML = html;
+}
+
+function renderAlerts(alerts) {
+  if (!alerts.length) {
+    document.getElementById('alerts').innerHTML = `<div class="alert info">Configuration looks sane for the stated target. Review stats above.</div>`;
+    return;
+  }
+  document.getElementById('alerts').innerHTML = alerts.map(a => `<div class="alert ${a.type}">${a.html}</div>`).join('');
+}
+
+function render() {
+  const i = getInputs();
+  const p = computePlan(i);
+
+  renderStats(p, i);
+  renderAlerts(buildAlerts(i, p));
+
+  const srvYaml = buildServerYaml(i, p);
+  const cliYaml = buildClientYaml(i, p);
+  document.getElementById('code-server').innerHTML = colorizeJson(srvYaml);
+  document.getElementById('code-client').innerHTML = colorizeJson(cliYaml);
+  document.getElementById('code-sysctl-srv').textContent = buildSysctl('srv', p);
+  document.getElementById('code-sysctl-cli').textContent = buildSysctl('cli', p);
+  document.getElementById('code-notes').textContent = buildNotes(i, p);
+
+  // ذخیرهٔ کل متن‌ها روی data برای دکمهٔ copy
+  document.getElementById('code-server').dataset.raw = srvYaml;
+  document.getElementById('code-client').dataset.raw = cliYaml;
+}
+
+/* ===== رویدادها ===== */
+
+// همگام‌سازی range و number برای Mbps
+const mbpsRange = document.getElementById('mbps');
+const mbpsNum   = document.getElementById('mbpsNum');
+mbpsRange.addEventListener('input', () => { mbpsNum.value = mbpsRange.value; updatePresetActive(); render(); });
+mbpsNum.addEventListener('input', () => {
+  const v = clamp(parseInt(mbpsNum.value) || 0, 1, 40000);
+  mbpsRange.value = clamp(v, parseInt(mbpsRange.min), parseInt(mbpsRange.max));
+  updatePresetActive(); render();
+});
+
+// همهٔ ورودی‌های دیگر
+document.querySelectorAll('input, select').forEach(el => {
+  if (el.id === 'mbps' || el.id === 'mbpsNum') return;
+  el.addEventListener('input', render);
+  el.addEventListener('change', render);
+});
+
+// پریست‌ها
+function updatePresetActive() {
+  const v = parseInt(mbpsNum.value);
+  document.querySelectorAll('.preset-btn').forEach(b => {
+    b.classList.toggle('active', parseInt(b.dataset.mbps) === v);
+  });
+}
+document.querySelectorAll('.preset-btn').forEach(b => {
+  b.addEventListener('click', () => {
+    mbpsNum.value = b.dataset.mbps;
+    mbpsRange.value = clamp(parseInt(b.dataset.mbps), parseInt(mbpsRange.min), parseInt(mbpsRange.max));
+    updatePresetActive();
+    render();
+  });
+});
+
+// تب‌ها
+document.querySelectorAll('#tabs .tab').forEach(t => {
+  t.addEventListener('click', () => {
+    document.querySelectorAll('#tabs .tab').forEach(x => x.classList.remove('active'));
+    document.querySelectorAll('.pane').forEach(x => x.classList.remove('active'));
+    t.classList.add('active');
+    document.getElementById('pane-' + t.dataset.pane).classList.add('active');
+  });
+});
+
+// دکمه‌های کپی
+document.querySelectorAll('.copy-btn').forEach(b => {
+  b.addEventListener('click', async () => {
+    const el = document.getElementById(b.dataset.target);
+    const text = el.dataset.raw || el.textContent;
+    try {
+      await navigator.clipboard.writeText(text);
+      const old = b.textContent;
+      b.textContent = 'Copied ✓';
+      b.classList.add('copied');
+      setTimeout(() => { b.textContent = old; b.classList.remove('copied'); }, 1200);
+    } catch {
+      alert('Copy failed. Select manually.');
+    }
+  });
+});
+
+render();
+</script>
+</body>
+</html>

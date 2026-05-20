@@ -1,0 +1,43 @@
+{
+  "mode": "server",
+  "psk": "dGVzdC1wYXNzd29yZC0zMi1ieXRlcy1rZXkhISE=",
+  "log_level": "info",
+  "tunmod": {
+    "enabled": false,
+    "device_name": "ultra0",
+    "local_cidr": "10.10.10.1/24",
+    "peer_cidr": "10.10.10.2/24",
+    "mtu": 1400,
+    "keepalive_sec": 20
+  },
+  "server": {
+    "listen": {
+      "tcp": "0.0.0.0:9443"
+    },
+    "fast_recovery": true,
+    "upstream_socks": "127.0.0.1:47963",
+    "download": {
+      "iran_ip": "92.242.220.190",
+      "iran_udp_port": 9444,
+      "spoof_source_ip": "194.225.101.22",
+      "spoof_udp_source_port": 0,
+      "interface": "",
+      "max_chunk_size": 1400,
+
+      "encryption": "none",
+
+      "max_total_mbps": 0,
+      "max_session_mbps": 0,
+
+      "target_read_buffer_bytes": 4194304,
+      "send_batch_size": 128,
+      "send_workers": 8,
+      "skip_udp_checksum": true,
+      "socket_send_buffer_bytes": 67108864,
+      "pipeline_slots": 8,
+      "udp_relay": "185.226.92.173:9450",
+      "retransmit_buffer_packets": 65536
+    },
+    "protocol_version": 1
+  }
+}
