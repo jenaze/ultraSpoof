@@ -4,6 +4,8 @@ import (
 	"flag"
 	"log"
 	"os"
+	"runtime"
+	"runtime/debug"
 
 	"github.com/ultraspoof/ultraspoof/internal/client"
 	"github.com/ultraspoof/ultraspoof/internal/config"
@@ -20,6 +22,17 @@ func main() {
 	root, err := config.Load(*cfgPath)
 	if err != nil {
 		log.Fatalf("config: %v", err)
+	}
+
+	if root.MaxCPU > 0 {
+		runtime.GOMAXPROCS(root.MaxCPU)
+		log.Printf("GOMAXPROCS set to %d", root.MaxCPU)
+	}
+
+	if root.MaxRAMMB > 0 {
+		limitBytes := int64(root.MaxRAMMB) * 1024 * 1024
+		debug.SetMemoryLimit(limitBytes)
+		log.Printf("Memory limit set to %d MB", root.MaxRAMMB)
 	}
 	switch root.Mode {
 	case config.ModeClient:

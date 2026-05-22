@@ -74,8 +74,9 @@ func (tb *tokenBucket) Wait(n int) {
 		waitNs := need / tb.ratePerNs
 		tb.mu.Unlock()
 		sleep := time.Duration(waitNs)
-		if sleep < 50*time.Microsecond {
-			sleep = 50 * time.Microsecond
+		if sleep < time.Millisecond {
+			// Avoid busy-looping and too many wake-ups. Give the CPU a break.
+			sleep = time.Millisecond
 		}
 		time.Sleep(sleep)
 	}
