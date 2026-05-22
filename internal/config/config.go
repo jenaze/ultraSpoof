@@ -27,6 +27,9 @@ type Root struct {
 	// LogLevel: خالی یا off = بدون لاگ اتصال؛ info = موفق/ناموفل بودن؛ debug = جزئیات کامل اتصال‌ها.
 	LogLevel string `json:"log_level,omitempty"`
 
+	MaxCPU   int `json:"max_cpu,omitempty"`
+	MaxRAMMB int `json:"max_ram_mb,omitempty"`
+
 	Client *ClientSpec `json:"client,omitempty"`
 	Server *ServerSpec `json:"server,omitempty"`
 	// TunMod لینک TUN نقطه‌به‌نقطه روی همان TCP کنترل (کلاینت از مسیر upstream_socks به remote وصل می‌شود).
