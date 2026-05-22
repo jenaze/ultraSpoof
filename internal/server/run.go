@@ -32,7 +32,7 @@ type udpDownloadSender interface {
 
 // مقادیر پیش‌فرض برای throughput بسیار بالا (هدف: اشباع پهنای باند).
 const (
-	defaultTargetReadBufBytes = 1 * 1024 * 1024
+	defaultTargetReadBufBytes = 128 * 1024
 	defaultSendBatchSize      = 64
 	defaultPipelineSlots      = 4
 	defaultTCPRecvBuf         = 8 * 1024 * 1024
@@ -145,6 +145,17 @@ func Run(cfg *config.Root) error {
 		ctrlKeepAlive = fastRecoveryTCPKeepalive
 	}
 
+	readBufSize := s.Download.TargetReadBufferBytes
+	if readBufSize <= 0 {
+		readBufSize = defaultTargetReadBufBytes
+	}
+	readBufPool := &sync.Pool{
+		New: func() interface{} {
+			b := make([]byte, readBufSize)
+			return &b
+		},
+	}
+
 	for {
 		c, err := ln.Accept()
 		if err != nil {
@@ -155,7 +166,7 @@ func Run(cfg *config.Root) error {
 			defer conn.Close()
 			peer := conn.RemoteAddr().String()
 			lg.Debugf("server accept from %s", peer)
-			err := handleConn(aead, plainMode, dlSender, cfg, lg, conn, iranIP, spoofIP, totalLimiter, retxCap, &tunSessionGate)
+			err := handleConn(aead, plainMode, dlSender, cfg, lg, conn, iranIP, spoofIP, totalLimiter, retxCap, &tunSessionGate, readBufPool)
 			if err != nil && !errors.Is(err, io.EOF) {
 				if lg.Level() >= applog.LevelInfo {
 					lg.Infof("connection closed peer=%s err=%v", peer, err)
@@ -217,7 +228,7 @@ type sessionState struct {
 	bytesSent          atomic.Uint64 // بایت‌های UDP payload ارسال‌شده (برای مبنای mbps)
 }
 
-func handleConn(aead cipher.AEAD, plainMode bool, sender udpDownloadSender, cfg *config.Root, lg *applog.Logger, client net.Conn, iranIP net.IP, spoofIP net.IP, totalLimiter *tokenBucket, retxCap int, tunGate *tunGate) error {
+func handleConn(aead cipher.AEAD, plainMode bool, sender udpDownloadSender, cfg *config.Root, lg *applog.Logger, client net.Conn, iranIP net.IP, spoofIP net.IP, totalLimiter *tokenBucket, retxCap int, tunGate *tunGate, readBufPool *sync.Pool) error {
 	s := cfg.Server
 	peer := client.RemoteAddr().String()
 
@@ -388,7 +399,7 @@ func handleConn(aead cipher.AEAD, plainMode bool, sender udpDownloadSender, cfg 
 			}
 
 			go func(sess *sessionState) {
-				err := pumpTargetToIranPipelined(aead, plainMode, sender, s, sess, totalLimiter, sessionLimiter)
+				err := pumpTargetToIranPipelined(aead, plainMode, sender, s, sess, totalLimiter, sessionLimiter, readBufPool)
 				if err != nil && !errors.Is(err, io.EOF) && !errors.Is(err, net.ErrClosed) {
 					lg.Debugf("target pump ended peer=%s session=%x err=%v", peer, sess.sessionID, err)
 				}
@@ -504,7 +515,7 @@ type batchSlot struct {
 //
 // پس از ارسال موفق هر batch، همهٔ پکت‌ها در retxRing session ذخیره می‌شوند تا
 // در صورت رسیدن NACK، فوراً دوباره فرستاده شوند.
-func pumpTargetToIranPipelined(aead cipher.AEAD, plainMode bool, sender udpDownloadSender, s *config.ServerSpec, sess *sessionState, totalLimiter, sessionLimiter *tokenBucket) error {
+func pumpTargetToIranPipelined(aead cipher.AEAD, plainMode bool, sender udpDownloadSender, s *config.ServerSpec, sess *sessionState, totalLimiter, sessionLimiter *tokenBucket, readBufPool *sync.Pool) error {
 	target := sess.target
 	sessionID := sess.sessionID
 	seq := &sess.seq
@@ -604,11 +615,23 @@ func pumpTargetToIranPipelined(aead cipher.AEAD, plainMode bool, sender udpDownl
 		close(senderErrCh)
 	}()
 
-	readBuf := make([]byte, readBufSize)
+	readBufPtr := readBufPool.Get().(*[]byte)
+	readBuf := *readBufPtr
+	if cap(readBuf) < readBufSize {
+		readBuf = make([]byte, readBufSize)
+	} else {
+		readBuf = readBuf[:readBufSize]
+	}
+	defer func() {
+		*readBufPtr = readBuf
+		readBufPool.Put(readBufPtr)
+	}()
+
 	var loopErr error
 
 readLoop:
 	for {
+		_ = target.SetReadDeadline(time.Now().Add(120 * time.Second))
 		n, err := target.Read(readBuf)
 		if n > 0 {
 			data := readBuf[:n]

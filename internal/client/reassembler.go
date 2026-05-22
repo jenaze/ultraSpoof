@@ -95,7 +95,7 @@ func newReassembler(pool *sync.Pool) *reassembler {
 
 func newReassemblerWith(cfg reassemblerConfig, pool *sync.Pool) *reassembler {
 	if cfg.MaxPending <= 0 {
-		cfg.MaxPending = 32768
+		cfg.MaxPending = 8192
 	}
 	if cfg.NackInterval <= 0 {
 		cfg.NackInterval = 30 * time.Millisecond

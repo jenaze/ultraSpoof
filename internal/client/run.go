@@ -41,7 +41,7 @@ func isRecvTransient(err error) bool {
 
 const (
 	defaultRecvBufferBytes      = 32 * 1024 * 1024
-	defaultSessionQueueSize     = 65536
+	defaultSessionQueueSize     = 2048
 	defaultUDPReadBufferBytes   = 2048 // اندازهٔ کافی برای MTU استاندارد + کمی جا
 	defaultHubQueueSize         = 262144
 	defaultClientTCPRecv        = 8 * 1024 * 1024
@@ -518,7 +518,7 @@ func runProxySession(cfg *config.Root, hub *udpHub, lg *applog.Logger, userConn 
 		statsInterval = defaultStatsIntervalSec * time.Second
 	}
 
-	go pumpUserToServer(ctx, userConn, ctrl, sessionID[:], errCh)
+	go pumpUserToServer(ctx, userConn, ctrl, sessionID[:], recvTimeout, errCh, &hub.bufPool)
 	go pumpServerControl(ctx, rawConn, errCh)
 	go pumpUDPToUser(ctx, sub.ch, userConn, reasm, &hub.payloadPool, recvTimeout, skipCheckInterval, errCh)
 	go pumpNackSender(ctx, ctrl, sessionID[:], reasm, nackTick, nackBudget, errCh)
@@ -547,13 +547,27 @@ func runProxySession(cfg *config.Root, hub *udpHub, lg *applog.Logger, userConn 
 	return err
 }
 
-func pumpUserToServer(ctx context.Context, user net.Conn, ctrl *controlConn, sessionID []byte, errCh chan<- error) {
-	buf := make([]byte, defaultUserConnReadBufBytes)
+func pumpUserToServer(ctx context.Context, user net.Conn, ctrl *controlConn, sessionID []byte, idleTimeout time.Duration, errCh chan<- error, bufPool *sync.Pool) {
+	bufPtr := bufPool.Get().(*[]byte)
+	buf := *bufPtr
+	if cap(buf) < defaultUserConnReadBufBytes {
+		buf = make([]byte, defaultUserConnReadBufBytes)
+	} else {
+		buf = buf[:defaultUserConnReadBufBytes]
+	}
+	defer func() {
+		*bufPtr = buf
+		bufPool.Put(bufPtr)
+	}()
+
 	for {
 		select {
 		case <-ctx.Done():
 			return
 		default:
+		}
+		if idleTimeout > 0 {
+			_ = user.SetReadDeadline(time.Now().Add(idleTimeout))
 		}
 		n, err := user.Read(buf)
 		if n > 0 {
@@ -607,11 +621,7 @@ func pumpServerControl(ctx context.Context, remote net.Conn, errCh chan<- error)
 // userConn می‌نویسد. همچنین با یک ticker مستقل، MaybeSkip را صدا می‌زند تا حتی
 // در نبود پکت تازه، اگر gap از skip_timeout گذشته باشد، stream stall نکند.
 func pumpUDPToUser(ctx context.Context, ch <-chan udpEvt, user net.Conn, reasm *reassembler, payloadPool *sync.Pool, idle time.Duration, skipCheck time.Duration, errCh chan<- error) {
-	firstWait := idle
-	if firstWait < 5*time.Minute {
-		firstWait = 10 * time.Minute
-	}
-	deadline := time.NewTimer(firstWait)
+	deadline := time.NewTimer(idle)
 	defer deadline.Stop()
 
 	skipTicker := time.NewTicker(skipCheck)
