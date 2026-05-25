@@ -159,22 +159,37 @@ func (s *Sender) SendBatch(srcIP net.IP, srcPort uint16, dstIP net.IP, dstPort u
 		return s.SendUDP(srcIP, srcPort, dstIP, dstPort, payloads[0])
 	}
 
-	bps := make([]*[]byte, len(payloads))
-	pkts := make([][]byte, len(payloads))
-	for i, p := range payloads {
-		bp := s.pktPool.Get().(*[]byte)
-		bps[i] = bp
-		pkts[i] = buildIPv4UDPPacket((*bp)[:0], s4, d4, srcPort, dstPort, p, s.skipUDPChecksum)
+	// Pre-calculate the total length needed for a single unified memory allocation
+	totalLen := 0
+	for _, p := range payloads {
+		totalLen += 28 + len(p) // 20 bytes IPv4 + 8 bytes UDP
 	}
+
+	bp := s.pktPool.Get().(*[]byte)
+	buf := *bp
+	if cap(buf) < totalLen {
+		buf = make([]byte, totalLen)
+	} else {
+		buf = buf[:totalLen]
+	}
+
+	pkts := make([][]byte, len(payloads))
+	offset := 0
+	for i, p := range payloads {
+		pktLen := 28 + len(p)
+		subBuf := buf[offset : offset+pktLen]
+		pkts[i] = buildIPv4UDPPacket(subBuf[:0], s4, d4, srcPort, dstPort, p, s.skipUDPChecksum)
+		offset += pktLen
+	}
+
 	defer func() {
-		for i := range bps {
-			*bps[i] = pkts[i][:0]
-			s.pktPool.Put(bps[i])
-		}
+		*bp = buf[:0]
+		s.pktPool.Put(bp)
 	}()
 
 	sh := s.pickShard()
 	sh.mu.Lock()
+	// Batch transmission: Use a single sendmmsg syscall instead of multiple Sendto syscalls
 	err := sendmmsgIPv4(sh.fd, d4, pkts)
 	sh.mu.Unlock()
 	return err
