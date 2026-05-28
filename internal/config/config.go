@@ -34,6 +34,8 @@ type Root struct {
 	Server *ServerSpec `json:"server,omitempty"`
 	// TunMod لینک TUN نقطه‌به‌نقطه روی همان TCP کنترل (کلاینت از مسیر upstream_socks به remote وصل می‌شود).
 	TunMod *TunModSpec `json:"tunmod,omitempty"`
+	// DeadConnIdleSec مدت زمان بیکاری (ثانیه) برای شناسایی و بستن اتوماتیک کانکشن‌های مرده (۰ = غیرفعال).
+	DeadConnIdleSec int `json:"dead_conn_idle_sec,omitempty"`
 }
 
 // TunModSpec تنظیمات رابط TUN overlay بین دو طرف ultraSpoof.

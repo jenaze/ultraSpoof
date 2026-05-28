@@ -17,6 +17,7 @@ import (
 
 	"github.com/ultraspoof/ultraspoof/internal/applog"
 	"github.com/ultraspoof/ultraspoof/internal/config"
+	"github.com/ultraspoof/ultraspoof/internal/connmanager"
 	"github.com/ultraspoof/ultraspoof/internal/crypto"
 	"github.com/ultraspoof/ultraspoof/internal/protocol"
 	"github.com/ultraspoof/ultraspoof/internal/tunmod"
@@ -64,6 +65,10 @@ func Run(cfg *config.Root) error {
 	}
 	c := cfg.Client
 	lg := applog.New(cfg.LogLevel)
+
+	connMgr := connmanager.New(cfg.DeadConnIdleSec, lg)
+	defer connMgr.Stop()
+
 	if c.FastRecovery {
 		lg.Infof("fast_recovery enabled: aggressive ARQ + shorter control TCP keepalive; override any download.* timer if needed")
 	}
@@ -103,7 +108,8 @@ func Run(cfg *config.Root) error {
 
 	handler := func(userConn net.Conn, targetHost string, targetPort uint16) error {
 		tuneClientTCP(userConn, defaultClientTCPRecv, defaultClientTCPSend, 0)
-		err := runProxySession(cfg, hub, lg, userConn, targetHost, targetPort)
+		userConn = connMgr.Track(userConn)
+		err := runProxySession(cfg, hub, lg, userConn, targetHost, targetPort, connMgr)
 		peer := userConn.RemoteAddr().String()
 		target := net.JoinHostPort(targetHost, fmt.Sprintf("%d", targetPort))
 		if err != nil && !errors.Is(err, io.EOF) {
@@ -421,7 +427,7 @@ func buildReassemblerConfig(c *config.ClientSpec) reassemblerConfig {
 	return cfg
 }
 
-func runProxySession(cfg *config.Root, hub *udpHub, lg *applog.Logger, userConn net.Conn, targetHost string, targetPort uint16) error {
+func runProxySession(cfg *config.Root, hub *udpHub, lg *applog.Logger, userConn net.Conn, targetHost string, targetPort uint16, connMgr *connmanager.Manager) error {
 	c := cfg.Client
 	peer := userConn.RemoteAddr().String()
 	target := net.JoinHostPort(targetHost, fmt.Sprintf("%d", targetPort))
@@ -452,6 +458,7 @@ func runProxySession(cfg *config.Root, hub *udpHub, lg *applog.Logger, userConn 
 		ctrlKeepAlive = 8 * time.Second
 	}
 	tuneClientTCP(rawConn, defaultClientTCPRecv, defaultClientTCPSend, ctrlKeepAlive)
+	rawConn = connMgr.Track(rawConn)
 	ctrl := newControlConn(rawConn)
 
 	var sessionID [16]byte

@@ -17,6 +17,7 @@ import (
 	"github.com/ultraspoof/ultraspoof/internal/applog"
 	sockbridge "github.com/ultraspoof/ultraspoof/internal/client"
 	"github.com/ultraspoof/ultraspoof/internal/config"
+	"github.com/ultraspoof/ultraspoof/internal/connmanager"
 	"github.com/ultraspoof/ultraspoof/internal/crypto"
 	"github.com/ultraspoof/ultraspoof/internal/protocol"
 	"github.com/ultraspoof/ultraspoof/internal/spoof"
@@ -56,6 +57,9 @@ func Run(cfg *config.Root) error {
 	}
 	s := cfg.Server
 	lg := applog.New(cfg.LogLevel)
+
+	connMgr := connmanager.New(cfg.DeadConnIdleSec, lg)
+	defer connMgr.Stop()
 
 	plainMode := config.IsPlainEncryption(s.Download.Encryption)
 	var aead cipher.AEAD
@@ -162,11 +166,12 @@ func Run(cfg *config.Root) error {
 			return err
 		}
 		tuneServerTCP(c, defaultTCPRecvBuf, defaultTCPSendBuf, ctrlKeepAlive)
+		c = connMgr.Track(c)
 		go func(conn net.Conn) {
 			defer conn.Close()
 			peer := conn.RemoteAddr().String()
 			lg.Debugf("server accept from %s", peer)
-			err := handleConn(aead, plainMode, dlSender, cfg, lg, conn, iranIP, spoofIP, totalLimiter, retxCap, &tunSessionGate, readBufPool)
+			err := handleConn(aead, plainMode, dlSender, cfg, lg, conn, iranIP, spoofIP, totalLimiter, retxCap, &tunSessionGate, readBufPool, connMgr)
 			if err != nil && !errors.Is(err, io.EOF) {
 				if lg.Level() >= applog.LevelInfo {
 					lg.Infof("connection closed peer=%s err=%v", peer, err)
@@ -228,7 +233,7 @@ type sessionState struct {
 	bytesSent          atomic.Uint64 // بایت‌های UDP payload ارسال‌شده (برای مبنای mbps)
 }
 
-func handleConn(aead cipher.AEAD, plainMode bool, sender udpDownloadSender, cfg *config.Root, lg *applog.Logger, client net.Conn, iranIP net.IP, spoofIP net.IP, totalLimiter *tokenBucket, retxCap int, tunGate *tunGate, readBufPool *sync.Pool) error {
+func handleConn(aead cipher.AEAD, plainMode bool, sender udpDownloadSender, cfg *config.Root, lg *applog.Logger, client net.Conn, iranIP net.IP, spoofIP net.IP, totalLimiter *tokenBucket, retxCap int, tunGate *tunGate, readBufPool *sync.Pool, connMgr *connmanager.Manager) error {
 	s := cfg.Server
 	peer := client.RemoteAddr().String()
 
@@ -356,6 +361,7 @@ func handleConn(aead cipher.AEAD, plainMode bool, sender udpDownloadSender, cfg 
 				targetKeepAlive = fastRecoveryTCPKeepalive
 			}
 			tuneServerTCP(dial, defaultTargetTCPBuf, defaultTargetTCPBuf, targetKeepAlive)
+			dial = connMgr.Track(dial)
 			lg.Debugf("dial target ok peer=%s target=%s local=%s session=%x", peer, targetAddr, dial.LocalAddr().String(), sessionID)
 
 			nackCtx, nackCancel := context.WithCancel(context.Background())
